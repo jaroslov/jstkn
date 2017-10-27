@@ -43,6 +43,11 @@ int Free(JSTKNSideEffect* SE, void* addr, uint64_t NumBytes)
     return 1;
 }
 
+int Schema(JSTKNSideEffect*, JSTKNTypes, void*)
+{
+    return 1;
+}
+
 int main(int argc, char *argv[])
 {
     STATE S             = { };
@@ -55,6 +60,7 @@ int main(int argc, char *argv[])
         .Malloc         = &Malloc,
         .Realloc        = &Realloc,
         .Free           = &Free,
+        .Schema         = &Schema,
     };
 
     for (int AA = 1; AA < argc; ++AA)

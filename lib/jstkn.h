@@ -13,6 +13,7 @@ typedef enum JSTKNTypes
     JSTKN_Null,
     JSTKN_True,
     JSTKN_False,
+    JSTKN_Bool,
     JSTKN_Number,
     JSTKN_String,
     JSTKN_Array,
@@ -21,14 +22,16 @@ typedef enum JSTKNTypes
 
 typedef struct JSTKNSideEffect
 {
-    void*       Handle;
-    void*     (*Begin)(JSTKNSideEffect*, JSTKNTypes, const char* ptr);
-    int       (*End)(JSTKNSideEffect*, void*, const char* ptr);
-    int       (*Fail)(JSTKNSideEffect*, void*, const char* ptr);
+    void*           Handle;
+    void*         (*Begin)(JSTKNSideEffect*, JSTKNTypes, const char* ptr);
+    int           (*End)(JSTKNSideEffect*, void*, const char* ptr);
+    int           (*Fail)(JSTKNSideEffect*, void*, const char* ptr);
 
-    void*     (*Malloc)(JSTKNSideEffect*, unsigned long long);
-    void*     (*Realloc)(JSTKNSideEffect*, void*, unsigned long long);
-    int       (*Free)(JSTKNSideEffect*, void*, unsigned long long);
+    void*         (*Malloc)(JSTKNSideEffect*, unsigned long long);
+    void*         (*Realloc)(JSTKNSideEffect*, void*, unsigned long long);
+    int           (*Free)(JSTKNSideEffect*, void*, unsigned long long);
+
+    int           (*Schema)(JSTKNSideEffect*, JSTKNTypes, void*);
 } JSTKNSideEffect;
 
 int jstknParse(const char* fst, const char* lst, JSTKNSideEffect* SE);
@@ -152,6 +155,11 @@ int jstknParseNull(JSTKNContext* Jxt)
     const char* start   = Jxt->fst;
     Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_Null, start);
 
+    if (!Jxt->SE->Schema(Jxt->SE, JSTKN_Null, Jxt->Thing))
+    {
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
+    }
+
     if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_Null))
     {
         return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
@@ -184,6 +192,11 @@ int jstknParseTrue(JSTKNContext* Jxt)
     const char* start   = Jxt->fst;
     Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_True, start);
 
+    if (!Jxt->SE->Schema(Jxt->SE, JSTKN_Bool, Jxt->Thing))
+    {
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
+    }
+
     if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_True))
     {
         return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
@@ -215,6 +228,11 @@ int jstknParseFalse(JSTKNContext* Jxt)
 {
     const char* start   = Jxt->fst;
     Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_False, start);
+
+    if (!Jxt->SE->Schema(Jxt->SE, JSTKN_Bool, Jxt->Thing))
+    {
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
+    }
 
     if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_False))
     {
@@ -249,6 +267,11 @@ int jstknParseNumber(JSTKNContext* Jxt)
     const char* cur     = Jxt->fst;
     const char* before  = nullptr;
     Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_Number, cur);
+
+    if (!Jxt->SE->Schema(Jxt->SE, JSTKN_Number, Jxt->Thing))
+    {
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+    }
 
     if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_Number))
     {
@@ -357,6 +380,11 @@ int jstknParseString(JSTKNContext* Jxt)
 {
     const char *cur     = Jxt->fst;
     Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_String, cur);
+
+    if (!Jxt->SE->Schema(Jxt->SE, JSTKN_String, Jxt->Thing))
+    {
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+    }
 
     if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_String))
     {
@@ -534,6 +562,11 @@ int jstknParseArrayBegin(JSTKNContext* Jxt)
 {
     Jxt->Thing      = Jxt->SE->Begin(Jxt->SE, JSTKN_Array, Jxt->fst);
 
+    if (!Jxt->SE->Schema(Jxt->SE, JSTKN_Array, Jxt->Thing))
+    {
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
+    }
+
     if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_Array))
     {
         return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
@@ -597,6 +630,11 @@ int jstknParseArrayEnd(JSTKNContext* Jxt)
 int jstknParseObjectBegin(JSTKNContext* Jxt)
 {
     Jxt->Thing      = Jxt->SE->Begin(Jxt->SE, JSTKN_Object, Jxt->fst);
+
+    if (!Jxt->SE->Schema(Jxt->SE, JSTKN_Object, Jxt->Thing))
+    {
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
+    }
 
     if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_Object))
     {
