@@ -367,11 +367,104 @@ int jstknParseString(JSTKNContext* Jxt)
     // Restrict to ASCII.
     while (cur < Jxt->lst)
     {
-        if ((int)cur[0] >= (int)128)
+        if ((unsigned)cur[0] >= (unsigned)128)
         {
-            return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+            // Handle super-ASCII (UTF-8), here.
+            switch ((unsigned)cur[0])
+            {
+            case 0xC0   : // Invalid encodings; reject.
+            case 0xC1   :
+            case 0xF5   :
+            case 0xF6   :
+            case 0xF7   :
+            case 0xF8   :
+            case 0xF9   :
+            case 0xFA   :
+            case 0xFB   :
+            case 0xFC   :
+            case 0xFD   :
+            case 0xFE   :
+            case 0xFF   : return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+            }
+            unsigned long encoding  = 0;
+            if (0xF0 == ((unsigned char)cur[0] & ~0x7))
+            {
+                if ((Jxt->lst - cur) <= 4)
+                {
+                    return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                if ((0x80 != ((unsigned char)cur[1] & ~0x3F))  ||
+                    (0x80 != ((unsigned char)cur[2] & ~0x3F))  ||
+                    (0x80 != ((unsigned char)cur[3] & ~0x3F))  ||
+                    0)
+                {
+                    return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                encoding            = ((unsigned char)cur[0] & 0x07) << 18
+                                    | ((unsigned char)cur[1] & 0x3F) << 12
+                                    | ((unsigned char)cur[2] & 0x3F) << 6
+                                    | ((unsigned char)cur[3] & 0x3F) << 0
+                                    ;
+                switch ((unsigned char)cur[0])
+                {
+                case 0xF0   : if (encoding < 0x10000) return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                case 0xF1   :
+                case 0xF2   :
+                case 0xF3   : if (encoding < 0x40000) return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                case 0xF4   : if (encoding < 0x100000) return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                default     : return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                cur += 4;
+            }
+            else if (0xE0 == ((unsigned char)cur[0] & ~0xF))
+            {
+                if ((Jxt->lst - cur) <= 3)
+                {
+                    return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                if ((0x80 != ((unsigned char)cur[1] & ~0x3F))  ||
+                    (0x80 != ((unsigned char)cur[2] & ~0x3F))  ||
+                    0)
+                {
+                    return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                encoding            = ((unsigned char)cur[0] & 0x0F) << 12
+                                    | ((unsigned char)cur[1] & 0x3F) << 6
+                                    | ((unsigned char)cur[2] & 0x3F) << 0
+                                    ;
+                switch ((unsigned char)cur[0])
+                {
+                case 0xE0   : if (encoding < 0x800) return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                default     : if (encoding < 0x1000) return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                cur += 3;
+            }
+            else if (0xC0 == ((unsigned char)cur[0] & ~0x1F))
+            {
+                if ((Jxt->lst - cur) <= 2)
+                {
+                    return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                if ((0x80 != ((unsigned char)cur[1] & ~0x3F))  ||
+                    0)
+                {
+                    return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                encoding            = ((unsigned char)cur[0] & 0x1F) << 6
+                                    | ((unsigned char)cur[1] & 0x3F) << 0
+                                    ;
+                if (encoding < 0x80)
+                {
+                    return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+                }
+                cur += 2;
+            }
+            else
+            {
+                return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
+            }
         }
-        if (cur[0] == '\\')
+        else if (cur[0] == '\\')
         {
             if ((cur+1) >= Jxt->lst)
             {
