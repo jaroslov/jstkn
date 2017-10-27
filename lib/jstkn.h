@@ -45,17 +45,29 @@ typedef signed long long    int64_j;
 
 #define CHAR_BIT_J          (8)
 
-static inline int jstknParseNull(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseTrue(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseFalse(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseNumber(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseString(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseArrayBegin(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseArrayEnd(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseObjectBegin(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseObjectEnd(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseColon(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-static inline int jstknParseComma(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+typedef struct JSTKNContext
+{
+    void*               Thing;
+    const char*         fst;
+    const char*         lst;
+    long long           StkPos;
+    long long           StkLength;  // In contexts (1b)
+    unsigned long long* Stack;
+    int                 key;
+    JSTKNSideEffect*    SE;
+} JSTKNContext;
+
+static inline int jstknParseNull(JSTKNContext* Jxt);
+static inline int jstknParseTrue(JSTKNContext* Jxt);
+static inline int jstknParseFalse(JSTKNContext* Jxt);
+static inline int jstknParseNumber(JSTKNContext* Jxt);
+static inline int jstknParseString(JSTKNContext* Jxt);
+static inline int jstknParseArrayBegin(JSTKNContext* Jxt);
+static inline int jstknParseArrayEnd(JSTKNContext* Jxt);
+static inline int jstknParseObjectBegin(JSTKNContext* Jxt);
+static inline int jstknParseObjectEnd(JSTKNContext* Jxt);
+static inline int jstknParseColon(JSTKNContext* Jxt);
+static inline int jstknParseComma(JSTKNContext* Jxt);
 
 static inline int jsspace(char c)
 {
@@ -64,32 +76,39 @@ static inline int jsspace(char c)
 
 int jstknParse(const char* fst, const char* lst, JSTKNSideEffect* SE)
 {
-    const char* cur     = fst;
-    int result          = 0;
-    uint64_j stklen     = (((lst - fst + (2 * CHAR_BIT_J - 1)) / (2 * CHAR_BIT_J)) + sizeof(uint64_j) - 1) / sizeof(uint64_j);
-
-    int64_j StkPos      = -1;
-    uint64_j* Stack     = (uint64_j*)SE->Malloc(SE, stklen);
-    int key             = JSTKN_Unknown;
-    void* Thing         = nullptr;
-
-    while (cur < lst)
+    JSTKNContext Jxt    =
     {
-        while ((cur < lst) && jsspace(*cur))
+        .Thing          = nullptr,
+        .fst            = fst,
+        .lst            = lst,
+        .StkPos         = -1,
+        .StkLength      = 8 * sizeof(uint64_t),
+        .Stack          = nullptr,
+        .SE             = SE,
+    };
+
+    int result          = 0;
+
+    Jxt.Stack           = (uint64_j*)SE->Malloc(SE, Jxt.StkLength);
+    Jxt.key             = JSTKN_Unknown;
+
+    while (Jxt.fst < lst)
+    {
+        while ((Jxt.fst < lst) && jsspace(*Jxt.fst))
         {
-            ++cur;
+            ++Jxt.fst;
         }
 
-        if (cur >= lst)
+        if (Jxt.fst >= lst)
         {
             break;
         }
 
-        switch (cur[0])
+        switch (Jxt.fst[0])
         {
-        case 'n'    : result    = jstknParseNull(&Thing, &cur, lst, &StkPos, Stack, &key, SE);          break;
-        case 't'    : result    = jstknParseTrue(&Thing, &cur, lst, &StkPos, Stack, &key, SE);          break;
-        case 'f'    : result    = jstknParseFalse(&Thing, &cur, lst, &StkPos, Stack, &key, SE);         break;
+        case 'n'    : result    = jstknParseNull(&Jxt);         break;
+        case 't'    : result    = jstknParseTrue(&Jxt);         break;
+        case 'f'    : result    = jstknParseFalse(&Jxt);        break;
         case '-'    :
         case '0'    :
         case '1'    :
@@ -100,14 +119,14 @@ int jstknParse(const char* fst, const char* lst, JSTKNSideEffect* SE)
         case '6'    :
         case '7'    :
         case '8'    :
-        case '9'    : result    = jstknParseNumber(&Thing, &cur, lst, &StkPos, Stack, &key, SE);        break;
-        case '"'    : result    = jstknParseString(&Thing, &cur, lst, &StkPos, Stack, &key, SE);        break;
-        case '['    : result    = jstknParseArrayBegin(&Thing, &cur, lst, &StkPos, Stack, &key, SE);    break;
-        case ']'    : result    = jstknParseArrayEnd(&Thing, &cur, lst, &StkPos, Stack, &key, SE);      break;
-        case '{'    : result    = jstknParseObjectBegin(&Thing, &cur, lst, &StkPos, Stack, &key, SE);   break;
-        case '}'    : result    = jstknParseObjectEnd(&Thing, &cur, lst, &StkPos, Stack, &key, SE);     break;
-        case ':'    : result    = jstknParseColon(&Thing, &cur, lst, &StkPos, Stack, &key, SE);         break;
-        case ','    : result    = jstknParseComma(&Thing, &cur, lst, &StkPos, Stack, &key, SE);         break;
+        case '9'    : result    = jstknParseNumber(&Jxt);       break;
+        case '"'    : result    = jstknParseString(&Jxt);       break;
+        case '['    : result    = jstknParseArrayBegin(&Jxt);   break;
+        case ']'    : result    = jstknParseArrayEnd(&Jxt);     break;
+        case '{'    : result    = jstknParseObjectBegin(&Jxt);  break;
+        case '}'    : result    = jstknParseObjectEnd(&Jxt);    break;
+        case ':'    : result    = jstknParseColon(&Jxt);        break;
+        case ','    : result    = jstknParseComma(&Jxt);        break;
         }
 
         if (!result)
@@ -116,29 +135,29 @@ int jstknParse(const char* fst, const char* lst, JSTKNSideEffect* SE)
         }
     }
 
-    SE->Free(SE, Stack, stklen);
+    SE->Free(SE, Jxt.Stack, Jxt.StkLength);
 
-    while ((cur < lst) && jsspace(cur[0]))
+    while ((Jxt.fst < lst) && jsspace(Jxt.fst[0]))
     {
-        ++cur;
+        ++Jxt.fst;
     }
 
-    return (cur >= lst);
+    return (Jxt.fst >= lst);
 }
 
-int jstknParseNull(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseNull(JSTKNContext* Jxt)
 {
-    const char* start   = *fst;
-    *Thing              = SE->Begin(SE, JSTKN_Null, start);
+    const char* start   = Jxt->fst;
+    Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_Null, start);
 
-    if ((*key != JSTKN_Unknown) && (*key != JSTKN_Any) && (*key != JSTKN_Null))
+    if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_Null))
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
-    if ((lst - start) < 4)
+    if ((Jxt->lst - start) < 4)
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
     if ((start[1] != 'u')   ||
@@ -146,31 +165,31 @@ int jstknParseNull(void** Thing, const char **fst, const char *lst, int64_j* Stk
         (start[3] != 'l')   ||
         0)
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
-    *fst    += 4;
+    Jxt->fst    += 4;
 
-    *key    = JSTKN_Unknown;
+    Jxt->key    = JSTKN_Unknown;
 
-    SE->End(SE, *Thing, *fst);
+    Jxt->SE->End(Jxt->SE, Jxt->Thing, Jxt->fst);
 
     return 1;
 }
 
-int jstknParseTrue(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseTrue(JSTKNContext* Jxt)
 {
-    const char* start   = *fst;
-    *Thing          = SE->Begin(SE, JSTKN_True, start);
+    const char* start   = Jxt->fst;
+    Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_True, start);
 
-    if ((*key != JSTKN_Unknown) && (*key != JSTKN_Any) && (*key != JSTKN_True))
+    if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_True))
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
-    if ((lst - start) < 4)
+    if ((Jxt->lst - start) < 4)
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
     if ((start[1] != 'r')   ||
@@ -178,31 +197,31 @@ int jstknParseTrue(void** Thing, const char **fst, const char *lst, int64_j* Stk
         (start[3] != 'e')   ||
         0)
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
-    *fst    += 4;
+    Jxt->fst    += 4;
 
-    *key    = JSTKN_Unknown;
+    Jxt->key    = JSTKN_Unknown;
 
-    SE->End(SE, *Thing, *fst);
+    Jxt->SE->End(Jxt->SE, Jxt->Thing, Jxt->fst);
 
     return 1;
 }
 
-int jstknParseFalse(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseFalse(JSTKNContext* Jxt)
 {
-    const char* start   = *fst;
-    *Thing          = SE->Begin(SE, JSTKN_False, start);
+    const char* start   = Jxt->fst;
+    Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_False, start);
 
-    if ((*key != JSTKN_Unknown) && (*key != JSTKN_Any) && (*key != JSTKN_False))
+    if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_False))
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
-    if ((lst - start) < 5)
+    if ((Jxt->lst - start) < 5)
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
     if ((start[1] != 'a')   ||
@@ -211,27 +230,27 @@ int jstknParseFalse(void** Thing, const char **fst, const char *lst, int64_j* St
         (start[4] != 'e')   ||
         0)
     {
-        return SE->Fail(SE, *Thing, start);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, start);
     }
 
-    *fst    += 5;
+    Jxt->fst    += 5;
 
-    *key    = JSTKN_Unknown;
+    Jxt->key    = JSTKN_Unknown;
 
-    SE->End(SE, *Thing, *fst);
+    Jxt->SE->End(Jxt->SE, Jxt->Thing, Jxt->fst);
 
     return 1;
 }
 
-int jstknParseNumber(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseNumber(JSTKNContext* Jxt)
 {
-    const char* cur     = *fst;
+    const char* cur     = Jxt->fst;
     const char* before  = nullptr;
-    *Thing              = SE->Begin(SE, JSTKN_Number, cur);
+    Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_Number, cur);
 
-    if ((*key != JSTKN_Unknown) && (*key != JSTKN_Any) && (*key != JSTKN_Number))
+    if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_Number))
     {
-        return SE->Fail(SE, *Thing, cur);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
     }
 
     if (cur[0] == '-')
@@ -239,14 +258,14 @@ int jstknParseNumber(void** Thing, const char **fst, const char *lst, int64_j* S
         ++cur;
     }
 
-    if (cur >= lst)
+    if (cur >= Jxt->lst)
     {
         return 0;
     }
 
     if (('1' <= cur[0]) && (cur[0] <= '9'))
     {
-        while ((cur < lst) && (('0' <= cur[0]) && (cur[0] <= '9')))
+        while ((cur < Jxt->lst) && (('0' <= cur[0]) && (cur[0] <= '9')))
         {
             ++cur;
         }
@@ -256,7 +275,7 @@ int jstknParseNumber(void** Thing, const char **fst, const char *lst, int64_j* S
         ++cur;
     }
 
-    if (cur >= lst)
+    if (cur >= Jxt->lst)
     {
         goto DONE_NUMBER;
     }
@@ -265,25 +284,25 @@ int jstknParseNumber(void** Thing, const char **fst, const char *lst, int64_j* S
     {
         ++cur;
 
-        if (cur >= lst)
+        if (cur >= Jxt->lst)
         {
-            return SE->Fail(SE, *Thing, cur);
+            return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
         }
 
         before  = cur;
 
-        while ((cur < lst) && (('0' <= cur[0]) && (cur[0] <= '9')))
+        while ((cur < Jxt->lst) && (('0' <= cur[0]) && (cur[0] <= '9')))
         {
             ++cur;
         }
 
         if (before == cur)
         {
-            return SE->Fail(SE, *Thing, cur);
+            return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
         }
     }
 
-    if (cur >= lst)
+    if (cur >= Jxt->lst)
     {
         goto DONE_NUMBER;
     }
@@ -295,66 +314,66 @@ int jstknParseNumber(void** Thing, const char **fst, const char *lst, int64_j* S
 
     ++cur;
 
-    if (cur >= lst)
+    if (cur >= Jxt->lst)
     {
-        return SE->Fail(SE, *Thing, cur);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
     }
 
     if ((cur[0] == '-') || (cur[0] == '+'))
     {
         ++cur;
 
-        if (cur >= lst)
+        if (cur >= Jxt->lst)
         {
-            return SE->Fail(SE, *Thing, cur);
+            return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
         }
     }
 
     before  = cur;
 
-    while ((cur < lst) && (('0' <= cur[0]) && (cur[0] <= '9')))
+    while ((cur < Jxt->lst) && (('0' <= cur[0]) && (cur[0] <= '9')))
     {
         ++cur;
     }
 
     if (before == cur)
     {
-        return SE->Fail(SE, *Thing, cur);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
     }
 
 DONE_NUMBER:
-    *fst            = cur;
+    Jxt->fst        = cur;
 
-    *key            = JSTKN_Unknown;
+    Jxt->key        = JSTKN_Unknown;
 
-    SE->End(SE, *Thing, *fst);
+    Jxt->SE->End(Jxt->SE, Jxt->Thing, Jxt->fst);
 
     return 1;
 }
 
-int jstknParseString(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseString(JSTKNContext* Jxt)
 {
-    const char *cur     = *fst;
-    *Thing              = SE->Begin(SE, JSTKN_String, cur);
+    const char *cur     = Jxt->fst;
+    Jxt->Thing          = Jxt->SE->Begin(Jxt->SE, JSTKN_String, cur);
 
-    if ((*key != JSTKN_Unknown) && (*key != JSTKN_Any) && (*key != JSTKN_String))
+    if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_String))
     {
-        return SE->Fail(SE, *Thing, cur);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
     }
 
     ++cur;
     // Restrict to ASCII.
-    while (cur < lst)
+    while (cur < Jxt->lst)
     {
         if ((int)cur[0] >= (int)128)
         {
-            return SE->Fail(SE, *Thing, cur);
+            return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
         }
         if (cur[0] == '\\')
         {
-            if ((cur+1) >= lst)
+            if ((cur+1) >= Jxt->lst)
             {
-                return SE->Fail(SE, *Thing, cur);
+                return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
             }
             ++cur;
             switch (cur[0])
@@ -373,9 +392,9 @@ int jstknParseString(void** Thing, const char **fst, const char *lst, int64_j* S
                     (('A' <= cur[0]) && (cur[0] <= 'F')) ||
                     0)
                 {
-                    if ((cur+4) >= lst)
+                    if ((cur+4) >= Jxt->lst)
                     {
-                        return SE->Fail(SE, *Thing, cur);
+                        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
                     }
                     for (int UU = 0; UU < 4; ++ UU)
                     {
@@ -386,7 +405,7 @@ int jstknParseString(void** Thing, const char **fst, const char *lst, int64_j* S
                         {
                             continue;
                         }
-                        return SE->Fail(SE, *Thing, cur);
+                        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
                     }
                     cur += 4;
                 }
@@ -401,178 +420,178 @@ int jstknParseString(void** Thing, const char **fst, const char *lst, int64_j* S
             ++cur;
         }
     }
-    if ((cur >= lst) || cur[0] != '"')
+    if ((cur >= Jxt->lst) || cur[0] != '"')
     {
-        return SE->Fail(SE, *Thing, cur);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, cur);
     }
     ++cur;
 
-    *fst            = cur;
+    Jxt->fst        = cur;
 
-    *key            = JSTKN_Unknown;
+    Jxt->key        = JSTKN_Unknown;
 
-    SE->End(SE, *Thing, *fst);
-
-    return 1;
-}
-
-int jstknParseArrayBegin(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
-{
-    *Thing          = SE->Begin(SE, JSTKN_Array, *fst);
-
-    if ((*key != JSTKN_Unknown) && (*key != JSTKN_Any) && (*key != JSTKN_Array))
-    {
-        return SE->Fail(SE, *Thing, *fst);
-    }
-
-    ++*fst;
-
-    *StkPos         += 1;
-
-    uint64_j STK    = Stack[*StkPos / sizeof(uint64_j)];
-
-    STK             &= ~(0x1 << (*StkPos % sizeof(uint64_j)));
-
-    Stack[*StkPos / sizeof(uint64_j)]    = STK;
-
-    *key            = JSTKN_Unknown;
+    Jxt->SE->End(Jxt->SE, Jxt->Thing, Jxt->fst);
 
     return 1;
 }
 
-int jstknParseArrayEnd(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseArrayBegin(JSTKNContext* Jxt)
 {
-    if (*StkPos < 0)
+    Jxt->Thing      = Jxt->SE->Begin(Jxt->SE, JSTKN_Array, Jxt->fst);
+
+    if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_Array))
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    int RType   = (Stack[*StkPos / sizeof(uint64_j)] >> (*StkPos % sizeof(uint64_j))) & 0x1;
+    ++Jxt->fst;
+
+    Jxt->StkPos     += 1;
+
+    uint64_j STK    = Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)];
+
+    STK             &= ~(0x1 << (Jxt->StkPos % sizeof(uint64_j)));
+
+    Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)]    = STK;
+
+    Jxt->key        = JSTKN_Unknown;
+
+    return 1;
+}
+
+int jstknParseArrayEnd(JSTKNContext* Jxt)
+{
+    if (Jxt->StkPos < 0)
+    {
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
+    }
+
+    int RType   = (Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)] >> (Jxt->StkPos % sizeof(uint64_j))) & 0x1;
 
     if (RType != 0x0)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    if (*key != JSTKN_Unknown)
+    if (Jxt->key != JSTKN_Unknown)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    --*StkPos;
+    --Jxt->StkPos;
 
-    ++*fst;
+    ++Jxt->fst;
 
-    *key    = JSTKN_Unknown;
+    Jxt->key        = JSTKN_Unknown;
 
-    SE->End(SE, *Thing, *fst);
+    Jxt->SE->End(Jxt->SE, Jxt->Thing, Jxt->fst);
 
     return 1;
 }
 
-int jstknParseObjectBegin(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseObjectBegin(JSTKNContext* Jxt)
 {
-    *Thing          = SE->Begin(SE, JSTKN_Object, *fst);
+    Jxt->Thing      = Jxt->SE->Begin(Jxt->SE, JSTKN_Object, Jxt->fst);
 
-    if ((*key != JSTKN_Unknown) && (*key != JSTKN_Any) && (*key != JSTKN_Object))
+    if ((Jxt->key != JSTKN_Unknown) && (Jxt->key != JSTKN_Any) && (Jxt->key != JSTKN_Object))
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    ++*fst;
+    ++Jxt->fst;
 
-    *StkPos         += 1;
+    Jxt->StkPos     += 1;
 
-    uint64_j STK    = Stack[*StkPos / sizeof(uint64_j)];
+    uint64_j STK    = Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)];
 
-    STK             |= (0x1 << (*StkPos % sizeof(uint64_j)));
+    STK             |= (0x1 << (Jxt->StkPos % sizeof(uint64_j)));
 
-    Stack[*StkPos / sizeof(uint64_j)]    = STK;
+    Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)]    = STK;
 
-    *key            = JSTKN_Unknown;
+    Jxt->key        = JSTKN_Unknown;
 
     return 1;
 }
 
-int jstknParseObjectEnd(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseObjectEnd(JSTKNContext* Jxt)
 {
-    if (*StkPos < 0)
+    if (Jxt->StkPos < 0)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    int RType   = (Stack[*StkPos / sizeof(uint64_j)] >> (*StkPos % sizeof(uint64_j))) & 0x1;
+    int RType   = (Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)] >> (Jxt->StkPos % sizeof(uint64_j))) & 0x1;
 
     if (RType != 0x1)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    if (*key != JSTKN_Unknown)
+    if (Jxt->key != JSTKN_Unknown)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    --*StkPos;
+    --Jxt->StkPos;
 
-    ++*fst;
+    ++Jxt->fst;
 
-    *key    = JSTKN_Unknown;
+    Jxt->key        = JSTKN_Unknown;
 
-    SE->End(SE, *Thing, *fst);
+    Jxt->SE->End(Jxt->SE, Jxt->Thing, Jxt->fst);
 
     return 1;
 }
 
-int jstknParseColon(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseColon(JSTKNContext* Jxt)
 {
-    if (*StkPos < 0)
+    if (Jxt->StkPos < 0)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    int RType   = (Stack[*StkPos / sizeof(uint64_j)] >> (*StkPos % sizeof(uint64_j))) & 0x1;
+    int RType   = (Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)] >> (Jxt->StkPos % sizeof(uint64_j))) & 0x1;
 
     if (RType != 0x1)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    if (*key != JSTKN_Unknown)
+    if (Jxt->key != JSTKN_Unknown)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    *key        = JSTKN_Any;
+    Jxt->key    = JSTKN_Any;
 
-    ++*fst;
+    ++Jxt->fst;
 
     return 1;
 }
 
-int jstknParseComma(void** Thing, const char **fst, const char *lst, int64_j* StkPos, uint64_j* Stack, int* key, JSTKNSideEffect* SE)
+int jstknParseComma(JSTKNContext* Jxt)
 {
-    if (*StkPos < 0)
+    if (Jxt->StkPos < 0)
     {
-        return SE->Fail(SE, *Thing, *fst);
+        return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    int RType   = (Stack[*StkPos / sizeof(uint64_j)] >> (*StkPos % sizeof(uint64_j))) & 0x1;
+    int RType   = (Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)] >> (Jxt->StkPos % sizeof(uint64_j))) & 0x1;
 
     if (RType == 0x1)
     {
-        if (*key != JSTKN_Unknown)
+        if (Jxt->key != JSTKN_Unknown)
         {
-            return SE->Fail(SE, *Thing, *fst);
+            return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
         }
-        *key    = JSTKN_String;
+        Jxt->key    = JSTKN_String;
     }
     else
     {
-        *key    = JSTKN_Any;
+        Jxt->key    = JSTKN_Any;
     }
 
-    ++*fst;
+    ++Jxt->fst;
 
     return 1;
 }
