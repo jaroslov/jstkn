@@ -82,7 +82,7 @@ int jstknParse(const char* fst, const char* lst, JSTKNSideEffect* SE)
         .fst            = fst,
         .lst            = lst,
         .StkPos         = -1,
-        .StkLength      = 8 * sizeof(uint64_t),
+        .StkLength      = (((lst - fst + (2 * CHAR_BIT_J - 1)) / (2 * CHAR_BIT_J)) + sizeof(uint64_j) - 1) / sizeof(uint64_j),
         .Stack          = nullptr,
         .SE             = SE,
     };
