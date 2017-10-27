@@ -21,5 +21,7 @@ The layout of the source is as follows:
     license
 
 TODO:
-    1. Proper UTF-8 validation.
-    2. Schema validation, via a schema-callback.
+
+1. Proper UTF-8 validation.
+2. Schema validation, via a schema-callback.
+
