@@ -32,6 +32,11 @@ void* Malloc(JSTKNSideEffect* SE, uint64_t NumBytes)
     return malloc(NumBytes);
 }
 
+void* Realloc(JSTKNSideEffect* SE, void* Orig, uint64_t NumBytes)
+{
+    return realloc(Orig, NumBytes);
+}
+
 int Free(JSTKNSideEffect* SE, void* addr, uint64_t NumBytes)
 {
     free(addr);
@@ -48,6 +53,7 @@ int main(int argc, char *argv[])
         .End            = &End,
         .Fail           = &Fail,
         .Malloc         = &Malloc,
+        .Realloc        = &Realloc,
         .Free           = &Free,
     };
 

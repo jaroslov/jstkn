@@ -27,6 +27,7 @@ typedef struct JSTKNSideEffect
     int       (*Fail)(JSTKNSideEffect*, void*, const char* ptr);
 
     void*     (*Malloc)(JSTKNSideEffect*, unsigned long long);
+    void*     (*Realloc)(JSTKNSideEffect*, void*, unsigned long long);
     int       (*Free)(JSTKNSideEffect*, void*, unsigned long long);
 } JSTKNSideEffect;
 
@@ -44,6 +45,7 @@ typedef unsigned long long  uint64_j;
 typedef signed long long    int64_j;
 
 #define CHAR_BIT_J          (8)
+#define STACK_SCALE_J       ((CHAR_BIT_J) * sizeof(uint64_j))
 
 typedef struct JSTKNContext
 {
@@ -82,14 +84,14 @@ int jstknParse(const char* fst, const char* lst, JSTKNSideEffect* SE)
         .fst            = fst,
         .lst            = lst,
         .StkPos         = -1,
-        .StkLength      = (((lst - fst + (2 * CHAR_BIT_J - 1)) / (2 * CHAR_BIT_J)) + sizeof(uint64_j) - 1) / sizeof(uint64_j),
+        .StkLength      = 8 * sizeof(uint64_j) * CHAR_BIT_J,
         .Stack          = nullptr,
         .SE             = SE,
     };
 
     int result          = 0;
 
-    Jxt.Stack           = (uint64_j*)SE->Malloc(SE, Jxt.StkLength);
+    Jxt.Stack           = (uint64_j*)SE->Malloc(SE, Jxt.StkLength / CHAR_BIT_J);
     Jxt.key             = JSTKN_Unknown;
 
     while (Jxt.fst < lst)
@@ -448,11 +450,21 @@ int jstknParseArrayBegin(JSTKNContext* Jxt)
 
     Jxt->StkPos     += 1;
 
-    uint64_j STK    = Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)];
+    if (Jxt->StkPos >= Jxt->StkLength)
+    {
+        Jxt->StkLength  *= 2;
+        Jxt->Stack      = (unsigned long long*)Jxt->SE->Realloc(Jxt->SE, Jxt->Stack, Jxt->StkLength / CHAR_BIT_J);
+        if (Jxt->Stack == nullptr)
+        {
+            return 0;
+        }
+    }
 
-    STK             &= ~(0x1 << (Jxt->StkPos % sizeof(uint64_j)));
+    uint64_j STK    = Jxt->Stack[Jxt->StkPos / STACK_SCALE_J];
 
-    Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)]    = STK;
+    STK             &= ~(0x1 << (Jxt->StkPos % STACK_SCALE_J));
+
+    Jxt->Stack[Jxt->StkPos / STACK_SCALE_J]    = STK;
 
     Jxt->key        = JSTKN_Unknown;
 
@@ -466,7 +478,7 @@ int jstknParseArrayEnd(JSTKNContext* Jxt)
         return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    int RType   = (Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)] >> (Jxt->StkPos % sizeof(uint64_j))) & 0x1;
+    int RType   = (Jxt->Stack[Jxt->StkPos / STACK_SCALE_J] >> (Jxt->StkPos % STACK_SCALE_J)) & 0x1;
 
     if (RType != 0x0)
     {
@@ -502,11 +514,21 @@ int jstknParseObjectBegin(JSTKNContext* Jxt)
 
     Jxt->StkPos     += 1;
 
-    uint64_j STK    = Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)];
+    if (Jxt->StkPos >= Jxt->StkLength)
+    {
+        Jxt->StkLength  *= 2;
+        Jxt->Stack      = (unsigned long long*)Jxt->SE->Realloc(Jxt->SE, Jxt->Stack, Jxt->StkLength / CHAR_BIT_J);
+        if (Jxt->Stack == nullptr)
+        {
+            return 0;
+        }
+    }
 
-    STK             |= (0x1 << (Jxt->StkPos % sizeof(uint64_j)));
+    uint64_j STK    = Jxt->Stack[Jxt->StkPos / STACK_SCALE_J];
 
-    Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)]    = STK;
+    STK             |= (0x1 << (Jxt->StkPos % STACK_SCALE_J));
+
+    Jxt->Stack[Jxt->StkPos / STACK_SCALE_J]    = STK;
 
     Jxt->key        = JSTKN_Unknown;
 
@@ -520,7 +542,7 @@ int jstknParseObjectEnd(JSTKNContext* Jxt)
         return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    int RType   = (Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)] >> (Jxt->StkPos % sizeof(uint64_j))) & 0x1;
+    int RType   = (Jxt->Stack[Jxt->StkPos / STACK_SCALE_J] >> (Jxt->StkPos % STACK_SCALE_J)) & 0x1;
 
     if (RType != 0x1)
     {
@@ -550,7 +572,7 @@ int jstknParseColon(JSTKNContext* Jxt)
         return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    int RType   = (Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)] >> (Jxt->StkPos % sizeof(uint64_j))) & 0x1;
+    int RType   = (Jxt->Stack[Jxt->StkPos / STACK_SCALE_J] >> (Jxt->StkPos % STACK_SCALE_J)) & 0x1;
 
     if (RType != 0x1)
     {
@@ -576,7 +598,7 @@ int jstknParseComma(JSTKNContext* Jxt)
         return Jxt->SE->Fail(Jxt->SE, Jxt->Thing, Jxt->fst);
     }
 
-    int RType   = (Jxt->Stack[Jxt->StkPos / sizeof(uint64_j)] >> (Jxt->StkPos % sizeof(uint64_j))) & 0x1;
+    int RType   = (Jxt->Stack[Jxt->StkPos / STACK_SCALE_J] >> (Jxt->StkPos % STACK_SCALE_J)) & 0x1;
 
     if (RType == 0x1)
     {
