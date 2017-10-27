@@ -30,18 +30,6 @@ typedef struct JSTKNSideEffect
     int       (*Free)(JSTKNSideEffect*, void*, unsigned long long);
 } JSTKNSideEffect;
 
-int jstknParseNull(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseTrue(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseFalse(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseNumber(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseString(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseArrayBegin(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseArrayEnd(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseObjectBegin(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseObjectEnd(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseColon(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-int jstknParseComma(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
-
 int jstknParse(const char* fst, const char* lst, JSTKNSideEffect* SE);
 
 #ifdef __cplusplus
@@ -57,7 +45,19 @@ typedef signed long long    int64_j;
 
 #define CHAR_BIT_J          (8)
 
-int jsspace(char c)
+static inline int jstknParseNull(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseTrue(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseFalse(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseNumber(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseString(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseArrayBegin(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseArrayEnd(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseObjectBegin(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseObjectEnd(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseColon(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+static inline int jstknParseComma(void** Thing, const char **fst, const char *lst, long long* StkPos, unsigned long long* Stack, int* key, JSTKNSideEffect* SE);
+
+static inline int jsspace(char c)
 {
     return !!((1ULL << c) & ((1ULL << 0x09) | (1ULL << 0x0A) | (1ULL << 0x0B) | (1ULL << 0x0C) | (1ULL << 0x0D) | (1ULL << 0x20)));
 }
